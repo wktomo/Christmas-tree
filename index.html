@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Merry Christmas</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: radial-gradient(ellipse at bottom, #0a0e1a 0%, #000000 100%);
+            font-family: 'Arial', sans-serif;
+            height: 100vh;
+            touch-action: none; 
+        }
+
+        #start-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #000000 0%, #1a0033 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            cursor: pointer;
+            transition: opacity 1.5s ease-in-out;
+        }
+
+        .start-btn {
+            padding: 15px 40px;
+            border: 2px solid rgba(245, 15, 142, 0.986);
+            color: #f9f102;
+            font-size: 18px;
+            border-radius: 50px;
+            letter-spacing: 3px;
+            background: rgba(255, 215, 0, 0.1);
+            box-shadow: 0 0 20px rgba(255,215,0,0.4);
+            animation: pulse 2s infinite ease-in-out;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .start-hint {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+            margin-top: 15px;
+            font-weight: normal;
+        }
+
+        #message {
+            position: absolute;
+            bottom: 12%;
+            width: 100%;
+            text-align: center;
+            color: #fff;
+            font-family: 'Dancing Script', cursive; 
+            font-size: 2.5rem; 
+            text-shadow: 0 0 10px #FFD700;
+            opacity: 0;
+            transition: opacity 3s ease-in-out;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        @media (min-width: 768px) {
+            #message { font-size: 3.5rem; }
+        }
+
+        canvas { display: block; }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(255,215,0,0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 0 40px rgba(255,215,0,0.7); }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <audio id="bgm" loop preload="auto">
+        <source src="https://music.163.com/song/media/outer/url?id=488249475.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="start-overlay" onclick="startShow()">
+        <div class="start-btn">轻点拆开礼物</div>
+        <div class="start-hint">圣诞节快乐</div>
+    </div>
+
+    <div id="message">湉湉，圣诞快乐</div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        document.oncontextmenu = function() {
+            return false; 
+        };
+        document.onselectstart = function() {
+            return false; 
+        };
+
+        // 3. 禁止常见的开发者工具快捷键
+        document.onkeydown = function(e) {
+            // 兼容性处理
+            const key = e.keyCode || e.which;
+            const ctrl = e.ctrlKey || e.metaKey; // Mac也是meta键
+            const shift = e.shiftKey;
+
+            // F12 (开发者工具)
+            if (key === 123) {
+                e.preventDefault();
+                return false;
+            }
+
+            // Ctrl + Shift + I (检查元素)
+            if (ctrl && shift && key === 73) {
+                e.preventDefault();
+                return false;
+            }
+
+            // Ctrl + Shift + J (控制台)
+            if (ctrl && shift && key === 74) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Ctrl + Shift + C (选择元素)
+            if (ctrl && shift && key === 67) {
+                e.preventDefault();
+                return false;
+            }
+
+            // Ctrl + U (查看源码)
+            if (ctrl && key === 85) {
+                e.preventDefault();
+                return false;
+            }
+
+            // Ctrl + S (保存网页)
+            if (ctrl && key === 83) {
+                e.preventDefault();
+                return false;
+            }
+        };
+        
+        // 4. 简单的调试器检测 (如果有人强行打开控制台，尝试停止运行)
+        setInterval(function() {
+            const before = new Date();
+            debugger; // 如果开启了控制台，代码会卡在这里
+            const after = new Date();
+            if (after - before > 100) {
+                // 检测到调试行为，清空页面或停止动画
+                document.body.innerHTML = "<h1>请勿查看源码，保留一份神秘感 ❤️</h1>";
+                window.location.reload(); 
+            }
+        }, 1000);
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let w, h;
+        let dpr = window.devicePixelRatio || 1;
+        
+        let particles = [];
+        let gifts = []; 
+        let lights = [];
+        let trunkParticles = []; // 新增：专门存放树干粒子
+        let snowflakes = [];
+        
+        let isPlaying = false;
+        let time = 0;
+        let isMobile = false;
+        
+        // 旋转相关：只保留自动旋转
+        let rotationAngle = 0;
+        const autoRotateSpeed = 0.0025; // 旋转速度，数值越小越慢
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            isMobile = w < 768; 
+
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+            ctx.scale(dpr, dpr); 
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 粒子类 (树叶)
+        class Particle {
+            constructor(angle, radius, y, hue) {
+                this.angle = angle;
+                this.radius = radius;
+                this.baseY = y;
+                this.y = y;
+                this.hue = hue;
+                this.size = 1.5 + Math.random() * 2;
+                this.floatOffset = Math.random() * Math.PI * 2;
+                this.x = 0; this.z = 0; this.scale = 1;
+            }
+            update(t, currentRotation) {
+                // 树叶轻微上下浮动
+                this.y = this.baseY + Math.sin(t * 0.002 + this.floatOffset) * 4;
+                
+                const combinedAngle = this.angle + currentRotation;
+                this.x = Math.cos(combinedAngle) * this.radius;
+                this.z = Math.sin(combinedAngle) * this.radius;
+                const perspective = isMobile ? 400 : 600;
+                const fov = perspective / (perspective + this.z);
+                this.scale = fov;
+                this.screenX = w / 2 + this.x * fov;
+                this.screenY = this.y * fov;
+            }
+            draw() {
+                if (this.scale < 0.2) return;
+                ctx.fillStyle = `hsla(${this.hue}, 80%, 60%, ${0.6 + this.z/this.radius * 0.2})`;
+                ctx.beginPath();
+                ctx.arc(this.screenX, this.screenY, this.size * this.scale, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 树干粒子类 (新增)
+        class TrunkParticle {
+            constructor(angle, radius, y) {
+                this.angle = angle;
+                this.radius = radius;
+                this.y = y;
+                // 深褐色范围
+                const l = 15 + Math.random() * 10;
+                this.color = `hsl(25, 40%, ${l}%)`;
+                this.size = 3; // 树干粒子稍微大一点，填补空隙
+                this.x = 0; this.z = 0; this.scale = 1;
+            }
+            update(t, currentRotation) {
+                // 树干不需要上下浮动，它是稳固的
+                const combinedAngle = this.angle + currentRotation;
+                this.x = Math.cos(combinedAngle) * this.radius;
+                this.z = Math.sin(combinedAngle) * this.radius;
+                const perspective = isMobile ? 400 : 600;
+                const fov = perspective / (perspective + this.z);
+                this.scale = fov;
+                this.screenX = w / 2 + this.x * fov;
+                this.screenY = this.y * fov;
+            }
+            draw() {
+                if (this.scale < 0.2) return;
+                ctx.fillStyle = this.color;
+                // 用矩形绘制树干粒子，看起来更像树皮
+                const s = this.size * this.scale;
+                ctx.fillRect(this.screenX - s/2, this.screenY - s/2, s + 1, s + 1); // +1 为了消除缝隙
+            }
+        }
+
+        // 礼物盒
+        class Gift {
+            constructor(angle, radius, y) {
+                this.angle = angle;
+                this.radius = radius;
+                this.baseY = y;
+                this.y = y;
+                this.baseSize = isMobile ? 10 + Math.random() * 8 : 12 + Math.random() * 10;
+                const boxHues = [0, 210, 330, 280, 40];
+                this.boxHue = boxHues[Math.floor(Math.random() * boxHues.length)];
+                this.ribbonHue = (this.boxHue + 180) % 360;
+                this.selfRotation = Math.random() * Math.PI * 2;
+                this.x = 0; this.z = 0; this.scale = 1;
+            }
+            update(t, currentRotation) {
+                this.selfRotation += 0.02;
+                this.y = this.baseY + Math.sin(t * 0.003 + this.angle) * 3;
+                const combinedAngle = this.angle + currentRotation;
+                this.x = Math.cos(combinedAngle) * this.radius;
+                this.z = Math.sin(combinedAngle) * this.radius;
+                const perspective = isMobile ? 400 : 600;
+                const fov = perspective / (perspective + this.z);
+                this.scale = fov;
+                this.screenX = w / 2 + this.x * fov;
+                this.screenY = this.y * fov;
+            }
+            draw() {
+                if (this.scale < 0.2) return;
+                const s = this.baseSize * this.scale;
+                ctx.save();
+                ctx.translate(this.screenX, this.screenY);
+                ctx.rotate(Math.sin(this.selfRotation) * 0.1); 
+                // 盒子
+                ctx.fillStyle = `hsl(${this.boxHue}, 70%, 50%)`;
+                ctx.fillRect(-s/2, -s/2, s, s);
+                // 丝带
+                ctx.fillStyle = `hsl(${this.ribbonHue}, 80%, 60%)`;
+                const rW = s * 0.25;
+                ctx.fillRect(-rW/2, -s/2, rW, s);
+                ctx.fillRect(-s/2, -rW/2, s, rW);
+                // 蝴蝶结
+                ctx.beginPath();
+                ctx.arc(0, -s/2 - 2, s * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 彩灯
+        class Light {
+            constructor(angle, radius, y) {
+                this.angle = angle;
+                this.radius = radius;
+                this.baseY = y;
+                this.y = y;
+                this.size = isMobile ? 2 : 3;
+                this.hue = Math.random() > 0.5 ? 45 : 0;
+                this.blinkSpeed = 0.05 + Math.random() * 0.1;
+                this.blinkOffset = Math.random() * 100;
+                this.x = 0; this.z = 0; this.scale = 1;
+            }
+            update(t, currentRotation) {
+                const combinedAngle = this.angle + currentRotation;
+                this.x = Math.cos(combinedAngle) * this.radius;
+                this.z = Math.sin(combinedAngle) * this.radius;
+                const perspective = isMobile ? 400 : 600;
+                const fov = perspective / (perspective + this.z);
+                this.scale = fov;
+                this.screenX = w / 2 + this.x * fov;
+                this.screenY = this.y * fov;
+                this.alpha = 0.4 + Math.sin(t * this.blinkSpeed + this.blinkOffset) * 0.6;
+                if(this.alpha < 0) this.alpha = 0;
+            }
+            draw() {
+                if (this.scale < 0.2) return;
+                const s = this.size * this.scale;
+                ctx.fillStyle = `hsla(${this.hue}, 100%, 70%, ${this.alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.screenX, this.screenY, s, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${this.alpha * 0.3})`;
+                ctx.beginPath();
+                ctx.arc(this.screenX, this.screenY, s * 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 雪花
+        class Snowflake {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * w;
+                this.y = -10;
+                this.size = (1 + Math.random() * 2); 
+                this.speed = 1 + Math.random() * 2;
+                this.drift = (Math.random() - 0.5) * 1;
+            }
+            update() {
+                this.y += this.speed;
+                this.x += this.drift;
+                if (this.y > h) this.reset();
+            }
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, 0.6)`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initTree() {
+            particles = [];
+            gifts = [];
+            lights = [];
+            trunkParticles = [];
+            
+            const treeTop = h * 0.15;
+            const treeHeight = h * 0.65;
+            
+            // 1. 生成树干 (圆柱体)
+            const trunkRadius = isMobile ? 8 : 12;
+            const trunkHeight = h * 0.20; // 树干长度
+            const trunkStart = treeTop + treeHeight * 0.9; // 从树冠底部开始
+            const trunkLayers = 40; // 树干密度
+            
+            for (let i = 0; i < trunkLayers; i++) {
+                const y = trunkStart + (i / trunkLayers) * trunkHeight;
+                // 每一层画一圈粒子
+                const circleCount = 12; 
+                for(let j=0; j<circleCount; j++){
+                    const angle = (j / circleCount) * Math.PI * 2;
+                    trunkParticles.push(new TrunkParticle(angle, trunkRadius, y));
+                }
+            }
+
+            // 2. 生成树叶
+            const layers = isMobile ? 35 : 60; 
+            for (let i = 0; i < layers; i++) {
+                const progress = i / layers;
+                const y = treeTop + treeHeight * progress;
+                const baseMaxRadius = (isMobile ? 15 : 20) + progress * (isMobile ? 160 : 240); 
+                const countMult = isMobile ? 30 : 60;
+                const particlesInLayer = 15 + progress * countMult;
+                
+                for (let j = 0; j < particlesInLayer; j++) {
+                    const angle = (j / particlesInLayer) * Math.PI * 2 + Math.random()*0.5;
+                    const radius = baseMaxRadius * (0.8 + Math.random() * 0.3); 
+                    const hue = 120 + Math.random() * 40;
+                    particles.push(new Particle(angle, radius, y, hue));
+                }
+            }
+            
+            // 3. 生成礼物
+            const giftCount = isMobile ? 20 : 35;
+            for (let i = 0; i < giftCount; i++) {
+                const progress = 0.2 + Math.random() * 0.8;
+                const y = treeTop + treeHeight * progress;
+                const maxRadius = (isMobile ? 15 : 20) + progress * (isMobile ? 150 : 230);
+                const radius = maxRadius * (0.9 + Math.random() * 0.2);
+                const angle = Math.random() * Math.PI * 2;
+                gifts.push(new Gift(angle, radius, y));
+            }
+            
+            // 4. 生成彩灯
+            const lightCount = isMobile ? 60 : 100;
+            for (let i = 0; i < lightCount; i++) {
+                const progress = 0.1 + Math.random() * 0.9;
+                const y = treeTop + treeHeight * progress;
+                const maxRadius = (isMobile ? 15 : 20) + progress * (isMobile ? 150 : 220);
+                const radius = maxRadius * (0.8 + Math.random() * 0.2);
+                const angle = Math.random() * Math.PI * 2;
+                lights.push(new Light(angle, radius, y));
+            }
+        }
+
+        function initSnow() {
+            snowflakes = [];
+            const count = isMobile ? 80 : 200; 
+            for (let i = 0; i < count; i++) snowflakes.push(new Snowflake());
+        }
+
+        function drawStar(t) {
+            const centerX = w / 2;
+            const y = h * 0.13;
+            const size = isMobile ? 20 : 30;
+            
+            ctx.save();
+            ctx.translate(centerX, y);
+            ctx.rotate(Math.sin(t * 0.02) * 0.1);
+            
+            const grad = ctx.createRadialGradient(0,0,0, 0,0,size);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(1, '#FFD700');
+            
+            ctx.fillStyle = grad;
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = size;
+            
+            ctx.beginPath();
+            for(let i=0; i<5; i++){
+                ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*size, 
+                           -Math.sin((18+i*72)/180*Math.PI)*size);
+                ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*size/2, 
+                           -Math.sin((54+i*72)/180*Math.PI)*size/2);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function animate() {
+            if (!isPlaying) return;
+            time++;
+            
+            // 自动旋转逻辑
+            rotationAngle += autoRotateSpeed;
+
+            ctx.clearRect(0, 0, w, h);
+            
+            snowflakes.forEach(s => { s.update(); s.draw(); });
+            
+            // 收集所有3D对象 (包括新加入的树干粒子)
+            const allObjects = [
+                ...trunkParticles.map(t => ({ obj: t, z: t.z })), // 树干
+                ...particles.map(p => ({ obj: p, z: p.z })),      // 树叶
+                ...gifts.map(g => ({ obj: g, z: g.z })),          // 礼物
+                ...lights.map(l => ({ obj: l, z: l.z }))          // 彩灯
+            ];
+            
+            // 关键：统一根据Z轴深度排序，实现正确的遮挡关系
+            allObjects.sort((a, b) => a.z - b.z);
+            
+            allObjects.forEach(item => {
+                item.obj.update(time, rotationAngle);
+                item.obj.draw();
+            });
+            
+            drawStar(time);
+            requestAnimationFrame(animate);
+        }
+
+        function startShow() {
+            isPlaying = true;
+            document.getElementById('start-overlay').style.opacity = 0;
+            setTimeout(() => {
+                document.getElementById('start-overlay').style.display = 'none';
+                document.getElementById('message').style.opacity = 1;
+            }, 1500);
+            
+            const bgm = document.getElementById('bgm');
+            bgm.play().then(() => {
+                console.log("播放成功");
+            }).catch(e => {
+                console.log("需要用户交互");
+            });
+            
+            initTree();
+            initSnow();
+            animate();
+        }
+    </script>
+</body>
+</html>
